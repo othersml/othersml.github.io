@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en-us">
+
+    <head>
+    <meta charset="utf-8">
+    <title>Watch Others Make Love</title>
+    <script src="//cdn.bootcss.com/jquery/3.1.0/jquery.min.js"></script>
+    <script src="//cdn.bootcss.com/msgpack-lite/0.1.20/msgpack.min.js"></script>
+    <style type="text/css">
+        html,body {background-color:#494A5F;text-align:center;display:block;margin:0;height:100%;align-items:center;}
+        
+        #player {display:none;z-index:100;}
+        #video {position:fixed;margin:auto;left:0; right:0; top:0; bottom:0;width:860px;height:540px;display:none;z-index:100;}
+        
+        .wrapper {position:fixed;margin:auto;left:0; right:0; top:0; bottom:0;width:980px;max-height:660px;height:inherit;overflow:hidden;}
+        #continue {border-radius:50%;width:100px;height:100px;background-color:#000000;position:absolute;bottom:-100px;left:250px;line-height: 22px;color: #fff;font-size:20px;cursor:pointer;z-index: 1000}
+        #continue img { margin-top:20px;height:45px;}
+        
+        #selector {width:100%;height:100%;background-color:#6699CC;z-index: 10;font-weight: 300;}
+        #category {background-color:#47a3da;width:300px;height:100%;position:absolute;left:0;font-weight: 300;overflow-y:auto;overflow-x:hidden;direction:rtl;z-index: 800;-webkit-overflow-scrolling: touch;}
+        
+        #category a {display: block;border-bottom: 1px solid #258ecd;width:100%;height:60px;color: #fff;line-height:60px;font-size:22px; }
+        #category a:hover {	background: #258ecd;cursor:pointer;}
+        #category .selected {background-color:#CCCCCC;color:#000000;}
+        
+        #movielist {background-color:#CCCCCC;width:680px;height:100%;position:absolute;right:0;color:#000000;z-index: 800;}
+        #movielist .change {left:300px;height:40px;width:120px;margin:auto;cursor:pointer;background:black;border-radius:0 0 5px 5px;font-size:18px;line-height:30px;color:#fff;background-image:url('/static/img/refresh.png');background-repeat:no-repeat;background-attachment：fixed;background-position:52px 21px;}
+        #movielist .lists {width:680px;overflow-y:auto;overflow-x:hidden;position: absolute;top: 42px;bottom: 0px;-webkit-overflow-scrolling: touch;}
+        
+        #movielist .list {display: block;border-bottom: 2px solid #000000;width:100%;height:120px;color: #fff;line-height:60px; }
+        #movielist .post {float:right;width:150px;height:100%;margin:auto;margin-right:25px;cursor:pointer;display:table-cell}
+        #movielist .content {float:right;width:350px;height:100%;margin-right:25px;vertical-align:middle;position:relative;color:#000000;}
+        #movielist .play {float:right;width:80px;height:100%;cursor:pointer;margin-right:25px;background-image:url('/static/img/play.png');background-repeat:no-repeat;background-attachment：fixed;background-position:center}
+        
+        #movielist .title {word-wrap:break-word; word-break:break-all; text-align: left;font-size:18px;line-height:18px;width:350px;margin-top:10px;}
+        #movielist .date {position: absolute;bottom:10px;text-align:left;font-size:18px;width:350px;height:20px;line-height:20px;}
+        #movielist i {display:inline-block; height:100%;vertical-align:middle}
+        #movielist img {width:150px;vertical-align:middle}
+        
+        #lampcord {position:relative;width:50px;height:100%;z-index: 600;left:275px;}
+        #lampcord .menu {position:absolute;height:50px;width:50px;background-color:#708090;bottom:0;border-radius:50%;background-image:url('/static/img/menu.png');background-repeat:no-repeat;background-attachment：fixed;background-position:center;cursor:pointer;}
+        #lampcord .line {position:absolute;width:4px;background-color:#ffffff;bottom:40px;top:0;left:0;right:0;margin:auto;}
+        
+        #galary {position:absolute;height:100%;width:100%;display: none;z-index:2000;opacity:0.85;filter:(opactity=85);background-color: #5B5B5B}
+        #popup {position:absolute;margin:auto;top:0;bottom:0;left:0;right:0;vertical-align:middle;max-height:80%;max-width:80%;z-index:3000;}
+        #galary i {display:inline-block; height:100%;vertical-align:middle}
+        
+         @media screen and (orientation:portrait) {
+             .wraper {top:500px;}
+            body {height:100vw;width:100vw;transform:rotate(90deg);-webkit-transform:rotate(90deg);-moz-transform:rotate(90deg);-o-transform:rotate(90deg);-ms-transform:rotate(90deg);}
+            
+            
+        }
+        
+    </style>
+        
+
+    </head>
+    <body>
+        <div class ="wrapper">
+            <div id="player" style="position:absolute;width:100%;height:auto;top:0;bottom:0"></div>
+            
+            <video id="video" controls autoplay></video>
+            
+            <div id="selector">
+                <div id="category">
+                </div>
+                
+                <div id="movielist">
+                    <div class="change" onclick="exchange()">换一换</div>
+                    <div id="lists" class="lists">
+                    </div>
+                </div>
+                
+                <div id="continue" title="继续播放" onclick="continue_play()">
+                    <img src="/static/img/pause.png"></img>
+                </div>
+                
+                <div id="lampcord">
+                    <div class="line"></div>
+                    <div class="menu" title="重新选片" onclick="reselect()"></div>
+                </div>
+            </div>
+        </div>
+        
+        <div id="galary" onclick="popdown()" title="点击关闭"></div>
+        <img id="popup" onclick="popdown()"></img>
+        
+        <script>
+            
+            var browserua = navigator.userAgent.toLowerCase();
+            console.log(browserua);
+            var selected = null,style,player=null;
+            var pagenum = 1,path="";
+            if(browserua.match(/(iphone|ipod|android|ios|ipad|mac)/i)){
+                style = "mobile";
+                player = $("#video");
+                getlist();
+            }else{
+                // var wrapper_height = document.documentElement.clientHeight > 660 ? 660 : document.documentElement.clientHeight;
+                // $(".wrapper").css("height",wrapper_height);
+                // $("#player").css("margin-top",wrapper_height-590);
+                getlist();
+                style = "flow";
+                init_flow();
+            }
+            
+            function init_flow(){
+                $('head').append('<link href="http://apps.bdimg.com/libs/flowplayer/6.0.4/skin/functional.css" rel="stylesheet" type="text/css" />')
+                $("#player").addClass('flowplayer no-background');
+                $.getScript("http://apps.bdimg.com/libs/flowplayer/6.0.4/flowplayer.js");
+            }
+            
+            function flow_load(file) {
+                if (player == null){
+                    
+                    player = flowplayer("#player", {
+                        clip:  {
+                            autoplay: true,
+                            autoBuffering: true,
+                            tooltip: false,
+                            wmode: "direct",
+                            sources:[{
+                                src :  file,
+                                type : "application/x-mpegurl"
+                            }]
+                        },
+                        swfHls: "http://apps.bdimg.com/libs/flowplayer/6.0.4/flowplayerhls.swf",
+                        embed:  false
+                    }).on("error", function (e, api, err) {
+                    if (err.code === 4) { // Video file not found
+                      // reset state
+                        api.error = api.loading = false;
+                      // change the skin color and alert the user
+                        $("#player").removeClass("is-error");
+                        console.log(err);
+                        // show_selector();
+                        // $("#player").fadeOut(3000);
+                    }});
+                    
+                    // player = flowplayer("#player").ready ? flowplayer("#player") : null;
+                    console.log("build player :" + player);
+                }else{
+                    player.load({
+                        sources:[{
+                            src :  file,
+                            type : "application/x-mpegurl"
+                        }]
+                    });
+                    console.log("replay");
+                }
+            }
+            
+            function msgup(file,callback){
+                var xhr = new XMLHttpRequest();
+                xhr.onreadystatechange = function(){
+                    if (xhr.readyState=== 4 && xhr.status === 200){
+                        var buffer = xhr.response;
+                        var dataview = new DataView(buffer);
+                        var ints = new Uint8Array(buffer.byteLength);
+                        for (var i = 0; i < ints.length; i++) {
+                            ints[i] = dataview.getUint8(i);
+                        } 
+                        var msgdata = msgpack.decode(ints);
+                        callback(msgdata);
+                    }
+                };
+                xhr.open("GET","https://cdn.rawgit.com/othersml/rawdata/master/" + file,true);
+                xhr.responseType = "arraybuffer";
+                xhr.send();
+            } 
+            
+            function select(obj) {
+                $(selected).removeClass("selected");
+                selected = obj;
+                $(obj).addClass("selected");
+                pagenum = $(obj).data("pagenum");
+                path = $(obj).data("path"); 
+                var randompage = Math.round(Math.random()*pagenum + 1);
+                var file = path + "/msg/page_" + randompage + ".pack";
+                msgup(file,listmovie);
+            }
+            
+            function listmovie(list) {
+                var template = '\
+                    <div class="list">\
+                            <div class="play" data-file="{filename}" data-server="{server}" data-poster="{image}" onclick="playmovie(this);"></div>\
+                            <div class="content">\
+                                <div class="title">{name}</div>\
+                                <div class="date" id="target">影片上架时间：{date} </div>\
+                            </div>\
+                            <div class="post" title="点击看大图">\
+                                <i></i><img src="{image}" onclick="enlarge(this)"></img>\
+                            </div>\
+                        </div>\
+                ';
+                
+                $("#lists").empty();
+                
+                for(var i = 0 ; i< list.length; i++){
+                    var lt = template.replace(/\\?\{([^{}]+)\}/g, function (match, name) {
+                        return (list[i][name] === undefined) ? '' : list[i][name];
+                    });
+                    $(lt).appendTo($("#lists"));
+                }
+                
+                $("#lists").animate({scrollTop:0});
+            }
+            
+            function listcategory(list) {
+                for(var i = 0 ; i< list.length; i++){
+                    var str = '<a data-pagenum="' + list[i]['pages'] +'" data-path="' + list[i]['path'] + '" onclick="javascript:select(this)">' + list[i]['name'] + '</a>' ;
+                    $(str).appendTo($("#category"));
+                }
+                var cats = Math.round(Math.random()*list.length);
+                selected =$("#category a")[cats];
+                $(selected).addClass("selected");
+                pagenum = $(selected).data("pagenum");
+                path = $(selected).data("path"); 
+                var randompage = Math.round(Math.random()*pagenum + 1);
+                var file = path + "/msg/page_" + randompage + ".pack";
+                msgup(file,listmovie);
+                
+            }
+            
+            function getlist() {
+                msgup("lists.pack",listcategory);
+            }
+            
+            function playmovie(obj) {
+                var file =  "http://" + $(obj).data("server") + ":1935/vod/mp4:" + $(obj).data("file") + "/playlist.m3u8";
+                
+                if(style == "mobile"){
+                    $("#source").remove();
+                    hide_selector();
+                    player.append('<source id="source" type="application/x-mpegurl" src="' + file + '">');
+                    player.show();
+                    
+                    // player[0].on("networkState",function () {
+                    //     console.log(player[0].networkState);
+                    // });
+                    
+                    player.on("onerror",function (err){
+                        player.hide();
+                        show_selector();
+                        console.log(err);
+                    });
+                    
+                }else{
+                    flow_load(file);
+                    hide_selector();
+                    $("#player").fadeIn(3000);
+                    $(".fp-context-menu").remove();
+                }
+                
+                 if (player[0]) {
+                    player[0].play();
+                 }else {
+                     player.play();
+                 }
+            }
+            
+            function hide_selector() {
+                $("#category").animate({left:"-300px"},3000);
+                $("#movielist").animate({right:"-680px"},3000);
+                $("#lampcord").animate({top:50 - parseInt($("#selector").css("height")) + "px"},3000);
+                $("#continue").animate({bottom:"-100px"},3000);
+            }
+            
+            function show_selector() {
+                $("#lampcord").animate({top:"0"},3000);
+                $("#category").animate({left:"0"},3000);
+                $("#movielist").animate({right:"0"},3000);
+                
+            }
+            
+            function reselect(){
+                if (player[0]) player[0].pause(); else player.pause();
+                show_selector();
+                $("#continue").animate({bottom:"-30px"},3000);
+            }
+            
+            function continue_play(){
+                hide_selector();
+                if (player == "flow") {
+                    player.resume(); 
+                 }else if (player[0]) {
+                    player[0].play();
+                 }else {
+                     player.play();
+                 }
+            }
+            
+            function enlarge(obj){
+                $("#popup").attr('src',obj.src);
+                $("#galary").show();
+                $("#popup").show();
+            }
+            
+            function exchange(){
+                var randompage = Math.round(Math.random()*pagenum + 1);
+                var file = path + "/msg/page_" + randompage + ".pack";
+                msgup(file,listmovie);
+            }
+            
+            function popdown(){
+                $("#galary").hide();
+                $('#popup').hide();
+            }
+            
+        </script>    
+    </body>
+</html>
+
